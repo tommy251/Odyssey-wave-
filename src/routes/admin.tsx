@@ -5,7 +5,7 @@ import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin")({
   component: AdminLayout,
-  head: () => ({ meta: [{ title: "Admin — Odyssey Wave" }] }),
+  head: () => ({ meta: [{ title: "Admin - Odyssey Wave" }] }),
 });
 
 function AdminLayout() {
@@ -35,7 +35,7 @@ function AdminLayout() {
   if (session === undefined) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">Checking access…</p>
+        <p className="text-muted-foreground">Checking access...</p>
       </div>
     );
   }
@@ -46,7 +46,6 @@ function AdminLayout() {
 }
 
 function AdminLogin() {
-  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -56,7 +55,7 @@ function AdminLogin() {
     e.preventDefault();
     setError("");
     if (!isSupabaseConfigured || !supabase) {
-      setError("Supabase is not configured.");
+      setError("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY env vars first.");
       return;
     }
     setLoading(true);
@@ -68,7 +67,7 @@ function AdminLogin() {
         return;
       }
     } catch (err: any) {
-      setError(err?.message || "Network error.");
+      setError(err?.message || "Network error. Check console.");
       setLoading(false);
     }
   };
@@ -78,27 +77,50 @@ function AdminLogin() {
       <SiteHeader />
       <div className="mx-auto max-w-md px-6 pt-32 pb-20">
         <h1 className="text-3xl font-bold">Admin login</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Restricted area. Only authorized accounts can sign in.</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Restricted area. Only authorized accounts can sign in.
+        </p>
         {!isSupabaseConfigured && (
           <div className="mt-6 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm">
             <p className="font-semibold text-destructive">Supabase not configured</p>
+            <p className="mt-1 text-muted-foreground">
+              Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY to your environment.
+            </p>
           </div>
         )}
         <form onSubmit={submit} className="mt-8 space-y-4">
           <div>
             <label className="block text-sm mb-1.5 text-muted-foreground">Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-lg border border-input bg-background/50 px-4 py-3 outline-none focus:border-primary" required />
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg border border-input bg-background/50 px-4 py-3 outline-none focus:border-primary"
+              required
+            />
           </div>
           <div>
             <label className="block text-sm mb-1.5 text-muted-foreground">Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-lg border border-input bg-background/50 px-4 py-3 outline-none focus:border-primary" required />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-lg border border-input bg-background/50 px-4 py-3 outline-none focus:border-primary"
+              required
+            />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <button type="submit" disabled={loading} className="w-full rounded-full bg-primary py-3 font-semibold text-primary-foreground disabled:opacity-50">
-            {loading ? "Signing in…" : "Sign in"}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-full bg-primary py-3 font-semibold text-primary-foreground disabled:opacity-50"
+          >
+            {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
-        <Link to="/" className="mt-6 block text-center text-sm text-muted-foreground hover:text-primary">← Back to shop</Link>
+        <Link to="/" className="mt-6 block text-center text-sm text-muted-foreground hover:text-primary">
+          Back to shop
+        </Link>
       </div>
     </div>
   );
