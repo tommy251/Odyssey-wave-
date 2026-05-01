@@ -1,12 +1,59 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin")({
-  component: AdminLogin,
+  component: AdminLayout,
   head: () => ({ meta: [{ title: "Admin — Odyssey Wave" }] }),
 });
+
+function AdminLayout() {
+  const navigate = useNavigate();
+  const [session, setSession] = useState<any>(undefined); // undefined = still checking
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) {
+      setSession(null);
+      return;
+    }
+
+    // Check existing session
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+    });
+
+    // Listen for changes
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      setSession(newSession);
+      if (event === "SIGNED_IN" && newSession) {
+        navigate({ to: "/admin/dashboard" });
+      }
+      if (event === "SIGNED_OUT") {
+        navigate({ to: "/admin" });
+      }
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, [navigate]);
+
+  // Loading state
+  if (session === undefined) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Checking access…</p>
+      </div>
+    );
+  }
+
+  // No session → show login form (this is what /admin renders)
+  if (!session) {
+    return <AdminLogin />;
+  }
+
+  // Session exists → render child route (admin.dashboard.tsx)
+  return <Outlet />;
+}
 
 function AdminLogin() {
   const navigate = useNavigate();
@@ -14,27 +61,10 @@ function AdminLogin() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [debug, setDebug] = useState("");
-
-  useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) return;
-
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      setDebug(`Auth event: ${event}, session: ${session ? "yes" : "no"}`);
-      if (session) {
-        navigate({ to: "/admin/dashboard" });
-      }
-    });
-
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, [navigate]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setDebug("");
 
     if (!isSupabaseConfigured || !supabase) {
       setError("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY env vars first.");
@@ -42,22 +72,15 @@ function AdminLogin() {
     }
 
     setLoading(true);
-    setDebug("Sending login request…");
-
     try {
-      const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
-
+      const { error: err } = await supabase.auth.signInWithPassword({ email, password });
       if (err) {
-        setDebug(`Login returned error: ${err.message}`);
         setError(err.message);
         setLoading(false);
         return;
       }
-
-      setDebug(`Login success. User: ${data.user?.email}. Waiting for auth state…`);
-      // onAuthStateChange above will handle navigation once session is broadcast
+      // Parent's onAuthStateChange will catch SIGNED_IN and navigate to /admin/dashboard
     } catch (err: any) {
-      setDebug(`Exception: ${err?.message || String(err)}`);
       setError(err?.message || "Network error. Check console.");
       setLoading(false);
     }
@@ -79,12 +102,6 @@ function AdminLogin() {
               Add <code className="text-primary">VITE_SUPABASE_URL</code> and{" "}
               <code className="text-primary">VITE_SUPABASE_PUBLISHABLE_KEY</code> to your environment.
             </p>
-          </div>
-        )}
-
-        {debug && (
-          <div className="mt-4 rounded-lg border border-primary/30 bg-primary/10 p-3 text-xs font-mono text-primary">
-            {debug}
           </div>
         )}
 
