@@ -11,4 +11,8 @@ export default defineConfig({
     react(),
     tsConfigPaths(),
   ],
+  root: '.',
+  build: {
+    outDir: 'dist',
+  },
 })
