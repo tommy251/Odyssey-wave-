@@ -10,20 +10,16 @@ export const Route = createFileRoute("/admin")({
 
 function AdminLayout() {
   const navigate = useNavigate();
-  const [session, setSession] = useState<any>(undefined); // undefined = still checking
+  const [session, setSession] = useState<any>(undefined);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
       setSession(null);
       return;
     }
-
-    // Check existing session
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
     });
-
-    // Listen for changes
     const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
       if (event === "SIGNED_IN" && newSession) {
@@ -33,11 +29,9 @@ function AdminLayout() {
         navigate({ to: "/admin" });
       }
     });
-
     return () => listener.subscription.unsubscribe();
   }, [navigate]);
 
-  // Loading state
   if (session === undefined) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -45,13 +39,9 @@ function AdminLayout() {
       </div>
     );
   }
-
-  // No session → show login form (this is what /admin renders)
   if (!session) {
     return <AdminLogin />;
   }
-
-  // Session exists → render child route (admin.dashboard.tsx)
   return <Outlet />;
 }
 
@@ -65,12 +55,10 @@ function AdminLogin() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
     if (!isSupabaseConfigured || !supabase) {
-      setError("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY env vars first.");
+      setError("Supabase is not configured.");
       return;
     }
-
     setLoading(true);
     try {
       const { error: err } = await supabase.auth.signInWithPassword({ email, password });
@@ -79,9 +67,8 @@ function AdminLogin() {
         setLoading(false);
         return;
       }
-      // Parent's onAuthStateChange will catch SIGNED_IN and navigate to /admin/dashboard
     } catch (err: any) {
-      setError(err?.message || "Network error. Check console.");
+      setError(err?.message || "Network error.");
       setLoading(false);
     }
   };
@@ -91,54 +78,27 @@ function AdminLogin() {
       <SiteHeader />
       <div className="mx-auto max-w-md px-6 pt-32 pb-20">
         <h1 className="text-3xl font-bold">Admin login</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Restricted area. Only authorized accounts can sign in.
-        </p>
-
+        <p className="mt-2 text-sm text-muted-foreground">Restricted area. Only authorized accounts can sign in.</p>
         {!isSupabaseConfigured && (
           <div className="mt-6 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm">
             <p className="font-semibold text-destructive">Supabase not configured</p>
-            <p className="mt-1 text-muted-foreground">
-              Add <code className="text-primary">VITE_SUPABASE_URL</code> and{" "}
-              <code className="text-primary">VITE_SUPABASE_PUBLISHABLE_KEY</code> to your environment.
-            </p>
           </div>
         )}
-
         <form onSubmit={submit} className="mt-8 space-y-4">
           <div>
             <label className="block text-sm mb-1.5 text-muted-foreground">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-input bg-background/50 px-4 py-3 outline-none focus:border-primary"
-              required
-            />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-lg border border-input bg-background/50 px-4 py-3 outline-none focus:border-primary" required />
           </div>
           <div>
             <label className="block text-sm mb-1.5 text-muted-foreground">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-input bg-background/50 px-4 py-3 outline-none focus:border-primary"
-              required
-            />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-lg border border-input bg-background/50 px-4 py-3 outline-none focus:border-primary" required />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-full bg-primary py-3 font-semibold text-primary-foreground disabled:opacity-50"
-          >
+          <button type="submit" disabled={loading} className="w-full rounded-full bg-primary py-3 font-semibold text-primary-foreground disabled:opacity-50">
             {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
-
-        <Link to="/" className="mt-6 block text-center text-sm text-muted-foreground hover:text-primary">
-          ← Back to shop
-        </Link>
+        <Link to="/" className="mt-6 block text-center text-sm text-muted-foreground hover:text-primary">← Back to shop</Link>
       </div>
     </div>
   );
