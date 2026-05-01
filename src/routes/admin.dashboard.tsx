@@ -31,13 +31,19 @@ function AdminDashboard() {
   const [editing, setEditing] = useState<Partial<Product> | null>(null);
   const [uploading, setUploading] = useState(false);
   const [msg, setMsg] = useState("");
+  const [fetchError, setFetchError] = useState("");
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
       navigate({ to: "/admin" });
       return;
     }
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(({ data, error: sessionErr }) => {
+      if (sessionErr) {
+        console.error("Session check failed:", sessionErr);
+        navigate({ to: "/admin" });
+        return;
+      }
       if (!data.session) navigate({ to: "/admin" });
       else {
         setAuthed(true);
@@ -48,16 +54,28 @@ function AdminDashboard() {
 
   const loadAll = async () => {
     if (!supabase) return;
-    const [p, o] = await Promise.all([
-      supabase.from("products").select("*").order("created_at", { ascending: false }),
-      supabase.from("orders").select("*").order("created_at", { ascending: false }),
-    ]);
-    if (p.data) setProducts(p.data as Product[]);
-    if (o.data) setOrders(o.data as Order[]);
+    setFetchError("");
+    try {
+      const [p, o] = await Promise.all([
+        supabase.from("products").select("*").order("created_at", { ascending: false }),
+        supabase.from("orders").select("*").order("created_at", { ascending: false }),
+      ]);
+      if (p.error) throw new Error("Products: " + p.error.message);
+      if (o.error) throw new Error("Orders: " + o.error.message);
+      if (p.data) setProducts(p.data as Product[]);
+      if (o.data) setOrders(o.data as Order[]);
+    } catch (err: any) {
+      console.error("Dashboard load error:", err);
+      setFetchError(err?.message || "Failed to load dashboard data.");
+    }
   };
 
   const signOut = async () => {
-    await supabase?.auth.signOut();
+    try {
+      await supabase?.auth.signOut();
+    } catch (e) {
+      console.error("Sign out error:", e);
+    }
     navigate({ to: "/admin" });
   };
 
@@ -67,56 +85,73 @@ function AdminDashboard() {
   const onUpload = async (file: File): Promise<string | null> => {
     if (!supabase) return null;
     setUploading(true);
-    const path = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_")}`;
-    const { error } = await supabase.storage.from("product-images").upload(path, file);
-    if (error) {
-      setMsg("Upload failed: " + error.message);
-      setUploading(false);
+    try {
+      const path = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_")}`;
+      const { error } = await supabase.storage.from("product-images").upload(path, file);
+      if (error) throw error;
+      const { data } = supabase.storage.from("product-images").getPublicUrl(path);
+      return data.publicUrl;
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      setMsg("Upload failed: " + (err?.message || "Unknown error"));
       return null;
+    } finally {
+      setUploading(false);
     }
-    const { data } = supabase.storage.from("product-images").getPublicUrl(path);
-    setUploading(false);
-    return data.publicUrl;
   };
 
   const saveProduct = async () => {
     if (!supabase || !editing) return;
     setMsg("");
-    const payload = {
-      name: editing.name ?? "",
-      slug: editing.slug || slugify(editing.name ?? ""),
-      price_ngn: Number(editing.price_ngn) || 0,
-      description: editing.description ?? "",
-      image_url: editing.image_url ?? null,
-      category: editing.category ?? null,
-      in_stock: editing.in_stock ?? true,
-    };
-    if (!payload.name || !payload.slug || !payload.price_ngn) {
-      setMsg("Name, slug, and price are required");
-      return;
+    try {
+      const payload = {
+        name: editing.name ?? "",
+        slug: editing.slug || slugify(editing.name ?? ""),
+        price_ngn: Number(editing.price_ngn) || 0,
+        description: editing.description ?? "",
+        image_url: editing.image_url ?? null,
+        category: editing.category ?? null,
+        in_stock: editing.in_stock ?? true,
+      };
+      if (!payload.name || !payload.slug || !payload.price_ngn) {
+        setMsg("Name, slug, and price are required");
+        return;
+      }
+      const res = editing.id
+        ? await supabase.from("products").update(payload).eq("id", editing.id)
+        : await supabase.from("products").insert(payload);
+      if (res.error) throw res.error;
+      setEditing(null);
+      setMsg("Saved.");
+      loadAll();
+    } catch (err: any) {
+      console.error("Save product error:", err);
+      setMsg("Save failed: " + (err?.message || "Unknown error"));
     }
-    const res = editing.id
-      ? await supabase.from("products").update(payload).eq("id", editing.id)
-      : await supabase.from("products").insert(payload);
-    if (res.error) {
-      setMsg("Save failed: " + res.error.message);
-      return;
-    }
-    setEditing(null);
-    setMsg("Saved.");
-    loadAll();
   };
 
   const deleteProduct = async (id: string) => {
     if (!supabase || !confirm("Delete this product?")) return;
-    await supabase.from("products").delete().eq("id", id);
-    loadAll();
+    try {
+      const { error } = await supabase.from("products").delete().eq("id", id);
+      if (error) throw error;
+      loadAll();
+    } catch (err: any) {
+      console.error("Delete error:", err);
+      setMsg("Delete failed: " + (err?.message || "Unknown error"));
+    }
   };
 
   const updateOrderStatus = async (id: string, status: string) => {
     if (!supabase) return;
-    await supabase.from("orders").update({ status }).eq("id", id);
-    loadAll();
+    try {
+      const { error } = await supabase.from("orders").update({ status }).eq("id", id);
+      if (error) throw error;
+      loadAll();
+    } catch (err: any) {
+      console.error("Order update error:", err);
+      setMsg("Order update failed: " + (err?.message || "Unknown error"));
+    }
   };
 
   if (!authed) return null;
@@ -147,6 +182,7 @@ function AdminDashboard() {
         </div>
 
         {msg && <p className="mb-4 text-sm text-primary">{msg}</p>}
+        {fetchError && <p className="mb-4 text-sm text-destructive">{fetchError}</p>}
 
         {tab === "products" && (
           <>

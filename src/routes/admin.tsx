@@ -17,7 +17,11 @@ function AdminLogin() {
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(({ data, error: sessionErr }) => {
+      if (sessionErr) {
+        console.error("Session check error:", sessionErr);
+        return;
+      }
       if (data.session) navigate({ to: "/admin/dashboard" });
     });
   }, [navigate]);
@@ -25,18 +29,32 @@ function AdminLogin() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
     if (!isSupabaseConfigured || !supabase) {
       setError("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY env vars first.");
       return;
     }
+
     setLoading(true);
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (err) {
-      setError(err.message);
-      return;
+
+    try {
+      console.log("DEBUG: Attempting login to", import.meta.env.VITE_SUPABASE_URL);
+      const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (err) {
+        console.error("Supabase login error:", err);
+        setError(err.message);
+        return;
+      }
+
+      console.log("Login success:", data);
+      navigate({ to: "/admin/dashboard" });
+    } catch (err: any) {
+      console.error("Unexpected login exception:", err);
+      setError(err?.message || "Network error. Check console for details.");
+    } finally {
+      setLoading(false);
     }
-    navigate({ to: "/admin/dashboard" });
   };
 
   return (
