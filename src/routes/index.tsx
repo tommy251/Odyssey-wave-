@@ -9,8 +9,8 @@ export const Route = createFileRoute("/")({
   component: Home,
   head: () => ({
     meta: [
-      { title: "Odyssey Wave — Curated tech for Nigeria" },
-      { name: "description", content: "Hand-picked tech that ships fast across Nigeria. LED, audio, wearables, lifestyle gear." },
+      { title: "Odyssey Wave - Curated tech for Nigeria" },
+      { name: "description", content: "Hand-picked tech that ships fast across Nigeria." },
     ],
   }),
 });
@@ -26,8 +26,7 @@ function Home() {
     <div className="min-h-screen">
       <SiteHeader />
 
-      {/* HERO */}
-      <section className="relative flex min-h-screen items-center justify-center px-6 pt-24">
+      <section className="relative flex min-h-screen items-center justify-center overflow-hidden px-6 pt-24">
         <VideoBackground src="/videos/wave1.mp4" />
         <div className="relative z-10 mx-auto max-w-4xl text-center">
           <p className="mb-4 text-xs uppercase tracking-[0.3em] text-primary">Odyssey Wave</p>
@@ -54,7 +53,6 @@ function Home() {
         </div>
       </section>
 
-      {/* PRODUCTS */}
       <section id="shop" className="relative mx-auto max-w-7xl px-6 py-24">
         <div className="mb-12 flex items-end justify-between">
           <div>
@@ -67,7 +65,7 @@ function Home() {
         </div>
 
         {products.length === 0 ? (
-          <div className="text-center py-20 text-muted-foreground">Loading the wave…</div>
+          <div className="text-center py-20 text-muted-foreground">Loading the wave</div>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {products.map((p) => (
@@ -86,7 +84,9 @@ function Home() {
                       loading="lazy"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-muted-foreground">No image</div>
+                    <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                      No image
+                    </div>
                   )}
                 </div>
                 <div className="p-5">
@@ -97,7 +97,7 @@ function Home() {
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-xl font-bold text-gradient-wave">{formatNaira(p.price_ngn)}</span>
                     <span className="text-xs text-muted-foreground group-hover:text-primary transition-colors">
-                      View →
+                      View
                     </span>
                   </div>
                 </div>
