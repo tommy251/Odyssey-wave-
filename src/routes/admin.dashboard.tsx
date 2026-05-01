@@ -24,7 +24,7 @@ type Order = {
 
 function AdminDashboard() {
   const navigate = useNavigate();
-  const [authed, setAuthed] = useState(false);
+  const [authed, setAuthed] = useState<boolean | null>(null); // null = still checking
   const [tab, setTab] = useState<"products" | "orders">("products");
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -38,18 +38,41 @@ function AdminDashboard() {
       navigate({ to: "/admin" });
       return;
     }
-    supabase.auth.getSession().then(({ data, error: sessionErr }) => {
-      if (sessionErr) {
-        console.error("Session check failed:", sessionErr);
-        navigate({ to: "/admin" });
+
+    let ignore = false;
+
+    // First check current session
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (ignore) return;
+      if (error || !data.session) {
+        // Wait a beat — onAuthStateChange might fire right after login
+        setTimeout(() => {
+          if (!ignore && authed === null) {
+            navigate({ to: "/admin" });
+          }
+        }, 800);
         return;
       }
-      if (!data.session) navigate({ to: "/admin" });
-      else {
+      setAuthed(true);
+      loadAll();
+    });
+
+    // Listen for auth state changes (this catches the session broadcast after login)
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (ignore) return;
+      if (event === "SIGNED_IN" && session) {
         setAuthed(true);
         loadAll();
       }
+      if (event === "SIGNED_OUT") {
+        navigate({ to: "/admin" });
+      }
     });
+
+    return () => {
+      ignore = true;
+      listener.subscription.unsubscribe();
+    };
   }, [navigate]);
 
   const loadAll = async () => {
@@ -154,7 +177,13 @@ function AdminDashboard() {
     }
   };
 
-  if (!authed) return null;
+  if (authed === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Checking access…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

@@ -14,21 +14,27 @@ function AdminLogin() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [debug, setDebug] = useState("");
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
-    supabase.auth.getSession().then(({ data, error: sessionErr }) => {
-      if (sessionErr) {
-        console.error("Session check error:", sessionErr);
-        return;
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      setDebug(`Auth event: ${event}, session: ${session ? "yes" : "no"}`);
+      if (session) {
+        navigate({ to: "/admin/dashboard" });
       }
-      if (data.session) navigate({ to: "/admin/dashboard" });
     });
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
   }, [navigate]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setDebug("");
 
     if (!isSupabaseConfigured || !supabase) {
       setError("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY env vars first.");
@@ -36,23 +42,23 @@ function AdminLogin() {
     }
 
     setLoading(true);
+    setDebug("Sending login request…");
 
     try {
-      console.log("DEBUG: Attempting login to", import.meta.env.VITE_SUPABASE_URL);
       const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
 
       if (err) {
-        console.error("Supabase login error:", err);
+        setDebug(`Login returned error: ${err.message}`);
         setError(err.message);
+        setLoading(false);
         return;
       }
 
-      console.log("Login success:", data);
-      navigate({ to: "/admin/dashboard" });
+      setDebug(`Login success. User: ${data.user?.email}. Waiting for auth state…`);
+      // onAuthStateChange above will handle navigation once session is broadcast
     } catch (err: any) {
-      console.error("Unexpected login exception:", err);
-      setError(err?.message || "Network error. Check console for details.");
-    } finally {
+      setDebug(`Exception: ${err?.message || String(err)}`);
+      setError(err?.message || "Network error. Check console.");
       setLoading(false);
     }
   };
@@ -71,9 +77,14 @@ function AdminLogin() {
             <p className="font-semibold text-destructive">Supabase not configured</p>
             <p className="mt-1 text-muted-foreground">
               Add <code className="text-primary">VITE_SUPABASE_URL</code> and{" "}
-              <code className="text-primary">VITE_SUPABASE_PUBLISHABLE_KEY</code> to your environment, then run the SQL
-              setup script (see /SUPABASE_SETUP.md in repo).
+              <code className="text-primary">VITE_SUPABASE_PUBLISHABLE_KEY</code> to your environment.
             </p>
+          </div>
+        )}
+
+        {debug && (
+          <div className="mt-4 rounded-lg border border-primary/30 bg-primary/10 p-3 text-xs font-mono text-primary">
+            {debug}
           </div>
         )}
 
