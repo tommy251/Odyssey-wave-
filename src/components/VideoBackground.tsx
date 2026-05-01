@@ -15,12 +15,15 @@ export function VideoBackground({ src, overlay = true }: Props) {
     const v = ref.current;
     if (!v) return;
     v.muted = true;
+    v.defaultMuted = true;
+    v.setAttribute("muted", "");
     v.play().catch(() => {});
-  }, []);
+  }, [chosen]);
 
   return (
     <div className="absolute inset-0 -z-10 overflow-hidden">
       <video
+        key={chosen}
         ref={ref}
         className="h-full w-full object-cover"
         src={chosen}
@@ -32,7 +35,7 @@ export function VideoBackground({ src, overlay = true }: Props) {
         aria-hidden="true"
       />
       {overlay && (
-        <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-background/60 to-background" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/30 to-black/70" />
       )}
     </div>
   );
