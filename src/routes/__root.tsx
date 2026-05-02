@@ -1,4 +1,4 @@
-import { Outlet, Link, createRootRoute, Scripts } from "@tanstack/react-router";
+import { Outlet, Link, createRootRoute } from "@tanstack/react-router";
 
 function NotFoundComponent() {
   return (
@@ -21,11 +21,6 @@ function NotFoundComponent() {
 }
 
 export const Route = createRootRoute({
-  component: () => (
-    <>
-      <Outlet />
-      <Scripts />
-    </>
-  ),
+  component: () => <Outlet />,
   notFoundComponent: NotFoundComponent,
 });
