@@ -1,4 +1,4 @@
-import { Outlet, Link, createRootRoute } from "@tanstack/react-router";
+import { Outlet, Link, createRootRoute, Scripts } from "@tanstack/react-router";
 
 function NotFoundComponent() {
   return (
@@ -7,7 +7,7 @@ function NotFoundComponent() {
         <h1 className="text-7xl font-bold text-gradient-wave">404</h1>
         <h2 className="mt-4 text-xl font-semibold">Lost in the wave</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          That page doesn't exist or has drifted out of orbit.
+          That page does not exist or has drifted out of orbit.
         </p>
         <Link
           to="/"
@@ -21,6 +21,11 @@ function NotFoundComponent() {
 }
 
 export const Route = createRootRoute({
-  component: () => <Outlet />,
+  component: () => (
+    <>
+      <Outlet />
+      <Scripts />
+    </>
+  ),
   notFoundComponent: NotFoundComponent,
 });
