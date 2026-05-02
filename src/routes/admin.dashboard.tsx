@@ -1,12 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { formatNaira, type Product } from "@/lib/products";
 
 export const Route = createFileRoute("/admin/dashboard")({
   component: AdminDashboard,
-  head: () => ({ meta: [{ title: "Dashboard - Odyssey Wave Admin" }] }),
+  head: () => ({ meta: [{ title: "Dashboard — Odyssey Wave Admin" }] }),
 });
 
 type Order = {
@@ -23,42 +23,42 @@ type Order = {
 };
 
 function AdminDashboard() {
+  const navigate = useNavigate();
+  const [authed, setAuthed] = useState(false);
   const [tab, setTab] = useState<"products" | "orders">("products");
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [editing, setEditing] = useState<Partial<Product> | null>(null);
   const [uploading, setUploading] = useState(false);
   const [msg, setMsg] = useState("");
-  const [fetchError, setFetchError] = useState("");
 
   useEffect(() => {
-    loadAll();
-  }, []);
+    if (!isSupabaseConfigured || !supabase) {
+      navigate({ to: "/admin" });
+      return;
+    }
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data.session) navigate({ to: "/admin" });
+      else {
+        setAuthed(true);
+        loadAll();
+      }
+    });
+  }, [navigate]);
 
   const loadAll = async () => {
     if (!supabase) return;
-    setFetchError("");
-    try {
-      const [p, o] = await Promise.all([
-        supabase.from("products").select("*").order("created_at", { ascending: false }),
-        supabase.from("orders").select("*").order("created_at", { ascending: false }),
-      ]);
-      if (p.error) throw new Error("Products: " + p.error.message);
-      if (o.error) throw new Error("Orders: " + o.error.message);
-      if (p.data) setProducts(p.data as Product[]);
-      if (o.data) setOrders(o.data as Order[]);
-    } catch (err: any) {
-      console.error("Dashboard load error:", err);
-      setFetchError(err?.message || "Failed to load dashboard data.");
-    }
+    const [p, o] = await Promise.all([
+      supabase.from("products").select("*").order("created_at", { ascending: false }),
+      supabase.from("orders").select("*").order("created_at", { ascending: false }),
+    ]);
+    if (p.data) setProducts(p.data as Product[]);
+    if (o.data) setOrders(o.data as Order[]);
   };
 
   const signOut = async () => {
-    try {
-      await supabase?.auth.signOut();
-    } catch (e) {
-      console.error("Sign out error:", e);
-    }
+    await supabase?.auth.signOut();
+    navigate({ to: "/admin" });
   };
 
   const slugify = (s: string) =>
@@ -67,74 +67,59 @@ function AdminDashboard() {
   const onUpload = async (file: File): Promise<string | null> => {
     if (!supabase) return null;
     setUploading(true);
-    try {
-      const path = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_")}`;
-      const { error } = await supabase.storage.from("product-images").upload(path, file);
-      if (error) throw error;
-      const { data } = supabase.storage.from("product-images").getPublicUrl(path);
-      return data.publicUrl;
-    } catch (err: any) {
-      console.error("Upload error:", err);
-      setMsg("Upload failed: " + (err?.message || "Unknown error"));
-      return null;
-    } finally {
+    const path = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_")}`;
+    const { error } = await supabase.storage.from("product-images").upload(path, file);
+    if (error) {
+      setMsg("Upload failed: " + error.message);
       setUploading(false);
+      return null;
     }
+    const { data } = supabase.storage.from("product-images").getPublicUrl(path);
+    setUploading(false);
+    return data.publicUrl;
   };
 
   const saveProduct = async () => {
     if (!supabase || !editing) return;
     setMsg("");
-    try {
-      const payload = {
-        name: editing.name ?? "",
-        slug: editing.slug || slugify(editing.name ?? ""),
-        price_ngn: Number(editing.price_ngn) || 0,
-        description: editing.description ?? "",
-        image_url: editing.image_url ?? null,
-        category: editing.category ?? null,
-        in_stock: editing.in_stock ?? true,
-      };
-      if (!payload.name || !payload.slug || !payload.price_ngn) {
-        setMsg("Name, slug, and price are required");
-        return;
-      }
-      const res = editing.id
-        ? await supabase.from("products").update(payload).eq("id", editing.id)
-        : await supabase.from("products").insert(payload);
-      if (res.error) throw res.error;
-      setEditing(null);
-      setMsg("Saved.");
-      loadAll();
-    } catch (err: any) {
-      console.error("Save product error:", err);
-      setMsg("Save failed: " + (err?.message || "Unknown error"));
+    const payload = {
+      name: editing.name ?? "",
+      slug: editing.slug || slugify(editing.name ?? ""),
+      price_ngn: Number(editing.price_ngn) || 0,
+      description: editing.description ?? "",
+      image_url: editing.image_url ?? null,
+      category: editing.category ?? null,
+      in_stock: editing.in_stock ?? true,
+    };
+    if (!payload.name || !payload.slug || !payload.price_ngn) {
+      setMsg("Name, slug, and price are required");
+      return;
     }
+    const res = editing.id
+      ? await supabase.from("products").update(payload).eq("id", editing.id)
+      : await supabase.from("products").insert(payload);
+    if (res.error) {
+      setMsg("Save failed: " + res.error.message);
+      return;
+    }
+    setEditing(null);
+    setMsg("Saved.");
+    loadAll();
   };
 
   const deleteProduct = async (id: string) => {
     if (!supabase || !confirm("Delete this product?")) return;
-    try {
-      const { error } = await supabase.from("products").delete().eq("id", id);
-      if (error) throw error;
-      loadAll();
-    } catch (err: any) {
-      console.error("Delete error:", err);
-      setMsg("Delete failed: " + (err?.message || "Unknown error"));
-    }
+    await supabase.from("products").delete().eq("id", id);
+    loadAll();
   };
 
   const updateOrderStatus = async (id: string, status: string) => {
     if (!supabase) return;
-    try {
-      const { error } = await supabase.from("orders").update({ status }).eq("id", id);
-      if (error) throw error;
-      loadAll();
-    } catch (err: any) {
-      console.error("Order update error:", err);
-      setMsg("Order update failed: " + (err?.message || "Unknown error"));
-    }
+    await supabase.from("orders").update({ status }).eq("id", id);
+    loadAll();
   };
+
+  if (!authed) return null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -143,7 +128,7 @@ function AdminDashboard() {
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-bold">Admin Dashboard</h1>
           <button onClick={signOut} className="text-sm text-muted-foreground hover:text-primary">
-            Sign out
+            Sign out →
           </button>
         </div>
 
@@ -162,7 +147,6 @@ function AdminDashboard() {
         </div>
 
         {msg && <p className="mb-4 text-sm text-primary">{msg}</p>}
-        {fetchError && <p className="mb-4 text-sm text-destructive">{fetchError}</p>}
 
         {tab === "products" && (
           <>
@@ -176,27 +160,10 @@ function AdminDashboard() {
             {editing && (
               <div className="mb-8 rounded-2xl border border-border bg-card p-6 space-y-4">
                 <h3 className="font-bold">{editing.id ? "Edit" : "New"} product</h3>
-                <Input
-                  label="Name"
-                  value={editing.name ?? ""}
-                  onChange={(v) => setEditing({ ...editing, name: v, slug: editing.slug || slugify(v) })}
-                />
-                <Input
-                  label="Slug (URL)"
-                  value={editing.slug ?? ""}
-                  onChange={(v) => setEditing({ ...editing, slug: v })}
-                />
-                <Input
-                  label="Price (NGN)"
-                  type="number"
-                  value={String(editing.price_ngn ?? "")}
-                  onChange={(v) => setEditing({ ...editing, price_ngn: Number(v) })}
-                />
-                <Input
-                  label="Category"
-                  value={editing.category ?? ""}
-                  onChange={(v) => setEditing({ ...editing, category: v })}
-                />
+                <Input label="Name" value={editing.name ?? ""} onChange={(v) => setEditing({ ...editing, name: v, slug: editing.slug || slugify(v) })} />
+                <Input label="Slug (URL)" value={editing.slug ?? ""} onChange={(v) => setEditing({ ...editing, slug: v })} />
+                <Input label="Price (₦)" type="number" value={String(editing.price_ngn ?? "")} onChange={(v) => setEditing({ ...editing, price_ngn: Number(v) })} />
+                <Input label="Category" value={editing.category ?? ""} onChange={(v) => setEditing({ ...editing, category: v })} />
                 <div>
                   <label className="block text-sm mb-1.5 text-muted-foreground">Description</label>
                   <textarea
@@ -222,19 +189,13 @@ function AdminDashboard() {
                     }}
                     className="text-sm"
                   />
-                  {uploading && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+                  {uploading && <p className="text-xs text-muted-foreground mt-1">Uploading…</p>}
                 </div>
                 <div className="flex gap-2">
-                  <button
-                    onClick={saveProduct}
-                    className="rounded-full bg-primary px-6 py-2 text-sm font-medium text-primary-foreground"
-                  >
+                  <button onClick={saveProduct} className="rounded-full bg-primary px-6 py-2 text-sm font-medium text-primary-foreground">
                     Save
                   </button>
-                  <button
-                    onClick={() => setEditing(null)}
-                    className="rounded-full border border-border px-6 py-2 text-sm"
-                  >
+                  <button onClick={() => setEditing(null)} className="rounded-full border border-border px-6 py-2 text-sm">
                     Cancel
                   </button>
                 </div>
@@ -244,32 +205,22 @@ function AdminDashboard() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {products.map((p) => (
                 <div key={p.id} className="rounded-xl border border-border bg-card overflow-hidden">
-                  {p.image_url && (
-                    <img src={p.image_url} alt={p.name} className="h-40 w-full object-cover" />
-                  )}
+                  {p.image_url && <img src={p.image_url} alt={p.name} className="h-40 w-full object-cover" />}
                   <div className="p-4">
                     <p className="font-medium">{p.name}</p>
                     <p className="text-sm text-gradient-wave font-bold">{formatNaira(p.price_ngn)}</p>
                     <div className="mt-3 flex gap-2">
-                      <button
-                        onClick={() => setEditing(p)}
-                        className="text-xs px-3 py-1 rounded-full border border-border"
-                      >
+                      <button onClick={() => setEditing(p)} className="text-xs px-3 py-1 rounded-full border border-border">
                         Edit
                       </button>
-                      <button
-                        onClick={() => deleteProduct(p.id)}
-                        className="text-xs px-3 py-1 rounded-full border border-destructive/40 text-destructive"
-                      >
+                      <button onClick={() => deleteProduct(p.id)} className="text-xs px-3 py-1 rounded-full border border-destructive/40 text-destructive">
                         Delete
                       </button>
                     </div>
                   </div>
                 </div>
               ))}
-              {products.length === 0 && (
-                <p className="text-muted-foreground col-span-full">No products yet. Add one above.</p>
-              )}
+              {products.length === 0 && <p className="text-muted-foreground col-span-full">No products yet. Add one above.</p>}
             </div>
           </>
         )}
@@ -290,18 +241,14 @@ function AdminDashboard() {
               <tbody>
                 {orders.map((o) => (
                   <tr key={o.id} className="border-t border-border">
-                    <td className="p-3 text-muted-foreground">
-                      {new Date(o.created_at).toLocaleDateString()}
-                    </td>
+                    <td className="p-3 text-muted-foreground">{new Date(o.created_at).toLocaleDateString()}</td>
                     <td className="p-3">
                       <p className="font-medium">{o.full_name}</p>
                       <p className="text-xs text-muted-foreground">{o.phone}</p>
                     </td>
                     <td className="p-3">{o.product_name}</td>
                     <td className="p-3 font-medium">{formatNaira(o.price_ngn)}</td>
-                    <td className="p-3 text-xs text-muted-foreground">
-                      {o.address}, {o.city}, {o.state}
-                    </td>
+                    <td className="p-3 text-xs text-muted-foreground">{o.address}, {o.city}, {o.state}</td>
                     <td className="p-3">
                       <select
                         value={o.status}
@@ -319,9 +266,7 @@ function AdminDashboard() {
                 ))}
                 {orders.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                      No orders yet.
-                    </td>
+                    <td colSpan={6} className="p-8 text-center text-muted-foreground">No orders yet.</td>
                   </tr>
                 )}
               </tbody>
