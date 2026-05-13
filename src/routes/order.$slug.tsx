@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -43,44 +43,89 @@ function OrderPage() {
     return (
       <div className="min-h-screen">
         <SiteHeader />
-        <div className="pt-32 text-center text-muted-foreground">Loading…</div>
+        <div className="pt-32 text-center text-muted-foreground">Loading...</div>
       </div>
     );
   }
 
+  const saveOrder = async (reference: string) => {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error: dbErr } = await supabase
+        .from("orders")
+        .insert({
+          product_id: product.id,
+          product_name: product.name,
+          price_ngn: product.price_ngn,
+          ...form,
+          status: "paid",
+        })
+        .select("id")
+        .single();
+      if (dbErr) throw new Error(dbErr.message);
+      return data?.id || reference;
+    }
+    return reference;
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
     setError("");
+
+    if (!form.full_name || !form.phone || !form.address) {
+      setError("Please fill name, phone, and address.");
+      return;
+    }
+
+    setSubmitting(true);
+
     try {
-      if (!form.full_name || !form.phone || !form.address) {
-        throw new Error("Please fill name, phone, and address.");
+      const PaystackPop = (window as any).PaystackPop;
+
+      if (!PaystackPop) {
+        throw new Error("Payment system not loaded. Please refresh and try again.");
       }
-      let orderId = "demo-" + Math.random().toString(36).slice(2, 10);
-      if (isSupabaseConfigured && supabase) {
-        const { data, error: dbErr } = await supabase
-          .from("orders")
-          .insert({
-            product_id: product.id,
-            product_name: product.name,
-            price_ngn: product.price_ngn,
-            ...form,
-            status: "new",
-          })
-          .select("id")
-          .single();
-        if (dbErr) throw new Error(dbErr.message);
-        if (data) orderId = data.id;
-      }
-      setDone({ id: orderId });
-      // Open WhatsApp confirmation
-      const waText = encodeURIComponent(
-        `Hi! I just placed order #${orderId.slice(0, 8)} on Odyssey Wave.\nProduct: ${product.name}\nAmount: ${formatNaira(product.price_ngn)}\nName: ${form.full_name}\nPhone: ${form.phone}\nAddress: ${form.address}, ${form.city}, ${form.state}`
-      );
-      window.open(`https://wa.me/2348000000000?text=${waText}`, "_blank");
+
+      const handler = PaystackPop.setup({
+        key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+        email: form.phone + "@odysseywave.ng",
+        amount: product.price_ngn * 100,
+        currency: "NGN",
+        ref: "OW-" + Math.random().toString(36).slice(2, 10).toUpperCase(),
+        metadata: {
+          custom_fields: [
+            { display_name: "Customer Name", variable_name: "full_name", value: form.full_name },
+            { display_name: "Phone", variable_name: "phone", value: form.phone },
+            { display_name: "Address", variable_name: "address", value: form.address + ", " + form.city + ", " + form.state },
+            { display_name: "Product", variable_name: "product", value: product.name },
+          ],
+        },
+        callback: async (response: any) => {
+          try {
+            const orderId = await saveOrder(response.reference);
+            setDone({ id: orderId });
+            const waText = encodeURIComponent(
+              "Hi! I just paid for order on Odyssey Wave.\nProduct: " + product.name +
+              "\nAmount: " + formatNaira(product.price_ngn) +
+              "\nRef: " + response.reference +
+              "\nName: " + form.full_name +
+              "\nPhone: " + form.phone +
+              "\nAddress: " + form.address + ", " + form.city + ", " + form.state
+            );
+            window.open("https://wa.me/2348000000000?text=" + waText, "_blank");
+          } catch (err) {
+            setError((err as Error).message);
+          } finally {
+            setSubmitting(false);
+          }
+        },
+        onClose: () => {
+          setSubmitting(false);
+        },
+      });
+
+      handler.openIframe();
     } catch (err) {
       setError((err as Error).message);
-    } finally {
       setSubmitting(false);
     }
   };
@@ -91,12 +136,12 @@ function OrderPage() {
         <SiteHeader />
         <div className="mx-auto max-w-xl px-6 pt-32 text-center">
           <div className="text-6xl mb-4">🎉</div>
-          <h1 className="text-3xl font-bold">Order received!</h1>
+          <h1 className="text-3xl font-bold">Payment successful!</h1>
           <p className="mt-3 text-muted-foreground">
             Order ID: <span className="text-primary font-mono">#{done.id.slice(0, 8)}</span>
           </p>
           <p className="mt-4 text-sm text-muted-foreground">
-            We'll confirm on WhatsApp shortly. Keep your phone close.
+            We will confirm on WhatsApp shortly. Keep your phone close.
           </p>
           <Link to="/" className="mt-8 inline-block rounded-full bg-primary px-6 py-3 text-primary-foreground font-medium">
             Back to shop
@@ -112,7 +157,7 @@ function OrderPage() {
       <SiteHeader />
       <div className="mx-auto max-w-2xl px-6 pt-32 pb-20">
         <Link to="/product/$slug" params={{ slug }} className="text-sm text-muted-foreground hover:text-primary">
-          ← Back to product
+          Back to product
         </Link>
         <h1 className="mt-4 text-4xl font-bold">Complete your order</h1>
         <div className="mt-2 mb-8 flex items-center gap-4 rounded-2xl border border-border/50 bg-card p-4">
@@ -148,10 +193,10 @@ function OrderPage() {
             disabled={submitting}
             className="w-full rounded-full bg-primary py-4 font-semibold text-primary-foreground transition-all hover:scale-[1.02] disabled:opacity-50 glow-wave"
           >
-            {submitting ? "Placing order…" : `Place order — ${formatNaira(product.price_ngn)}`}
+            {submitting ? "Opening payment..." : "Pay " + formatNaira(product.price_ngn) + " securely"}
           </button>
           <p className="text-xs text-center text-muted-foreground">
-            Pay on delivery in Lagos · Pay before delivery elsewhere
+            Secured by Paystack. Card, bank transfer and USSD accepted.
           </p>
         </form>
       </div>
