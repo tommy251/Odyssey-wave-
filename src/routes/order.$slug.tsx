@@ -5,6 +5,8 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { fetchProductBySlug, formatNaira, type Product } from "@/lib/products";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 
+const PAYSTACK_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+
 export const Route = createFileRoute("/order/$slug")({
   component: OrderPage,
   notFoundComponent: () => (
@@ -76,6 +78,11 @@ function OrderPage() {
       return;
     }
 
+    if (!PAYSTACK_KEY) {
+      setError("Payment key is missing. Please contact support.");
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -86,7 +93,7 @@ function OrderPage() {
       }
 
       const handler = PaystackPop.setup({
-        key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+        key: PAYSTACK_KEY,
         email: form.phone + "@odysseywave.ng",
         amount: product.price_ngn * 100,
         currency: "NGN",
@@ -99,24 +106,26 @@ function OrderPage() {
             { display_name: "Product", variable_name: "product", value: product.name },
           ],
         },
-        callback: async (response: any) => {
-          try {
-            const orderId = await saveOrder(response.reference);
-            setDone({ id: orderId });
-            const waText = encodeURIComponent(
-              "Hi! I just paid for order on Odyssey Wave.\nProduct: " + product.name +
-              "\nAmount: " + formatNaira(product.price_ngn) +
-              "\nRef: " + response.reference +
-              "\nName: " + form.full_name +
-              "\nPhone: " + form.phone +
-              "\nAddress: " + form.address + ", " + form.city + ", " + form.state
-            );
-            window.open("https://wa.me/2348000000000?text=" + waText, "_blank");
-          } catch (err) {
-            setError((err as Error).message);
-          } finally {
-            setSubmitting(false);
-          }
+        callback: function (response: any) {
+          saveOrder(response.reference)
+            .then((orderId) => {
+              setDone({ id: orderId });
+              const waText = encodeURIComponent(
+                "Hi! I just paid for an order on Odyssey Wave.\nProduct: " + product.name +
+                "\nAmount: " + formatNaira(product.price_ngn) +
+                "\nRef: " + response.reference +
+                "\nName: " + form.full_name +
+                "\nPhone: " + form.phone +
+                "\nAddress: " + form.address + ", " + form.city + ", " + form.state
+              );
+              window.open("https://wa.me/2348000000000?text=" + waText, "_blank");
+            })
+            .catch((err) => {
+              setError((err as Error).message);
+            })
+            .finally(() => {
+              setSubmitting(false);
+            });
         },
         onClose: () => {
           setSubmitting(false);
