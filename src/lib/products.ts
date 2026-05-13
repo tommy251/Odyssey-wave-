@@ -12,6 +12,7 @@ export type Product = {
   created_at?: string;
 };
 
+// Fallback only when Supabase is NOT configured
 const SEED: Product[] = [
   {
     id: "demo-1",
@@ -54,17 +55,27 @@ export async function fetchProducts(): Promise<Product[]> {
     .from("products")
     .select("*")
     .order("created_at", { ascending: false });
-  if (error || !data || data.length === 0) return SEED;
-  return data as Product[];
+  if (error) {
+    console.error("fetchProducts error:", error);
+    return [];
+  }
+  return (data as Product[]) ?? [];
 }
 
 export async function fetchProductBySlug(slug: string): Promise<Product | null> {
   if (!isSupabaseConfigured || !supabase) {
     return SEED.find((p) => p.slug === slug) ?? null;
   }
-  const { data } = await supabase.from("products").select("*").eq("slug", slug).maybeSingle();
-  if (!data) return SEED.find((p) => p.slug === slug) ?? null;
-  return data as Product;
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error) {
+    console.error("fetchProductBySlug error:", error);
+    return null;
+  }
+  return data as Product | null;
 }
 
 export function formatNaira(n: number): string {

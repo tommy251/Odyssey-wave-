@@ -17,9 +17,14 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchProducts().then(setProducts);
+    setLoading(true);
+    fetchProducts().then((p) => {
+      setProducts(p);
+      setLoading(false);
+    });
   }, []);
 
   return (
@@ -64,9 +69,17 @@ function Home() {
           </p>
         </div>
 
-        {products.length === 0 ? (
-          <div className="text-center py-20 text-muted-foreground">Loading the wave</div>
-        ) : (
+        {loading && (
+          <div className="text-center py-20 text-muted-foreground">Loading the wave…</div>
+        )}
+
+        {!loading && products.length === 0 && (
+          <div className="text-center py-20 text-muted-foreground">
+            No products yet. Add them in the admin dashboard.
+          </div>
+        )}
+
+        {!loading && products.length > 0 && (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {products.map((p) => (
               <Link
