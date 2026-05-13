@@ -18,12 +18,6 @@ export function SiteHeader() {
           <Link to="/contact" className="hover:text-primary transition-colors" activeProps={{ className: "text-primary" }}>
             Contact
           </Link>
-          <Link
-            to="/admin"
-            className="rounded-full border border-primary/40 px-4 py-1.5 text-xs uppercase tracking-wider text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
-          >
-            Admin
-          </Link>
         </nav>
       </div>
     </header>
